@@ -4,7 +4,7 @@
  * Every business figure in this app arrives through here. The frontend never
  * computes money for storage - it only renders what the backend calculated.
  */
-const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+const BASE = process.env.NEXT_PUBLIC_API_URL || 'https://backend-vd3v.onrender.com/api';
 
 export class ApiError extends Error {
   constructor(message, status, details) {
