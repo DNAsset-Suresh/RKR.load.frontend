@@ -113,7 +113,7 @@ export const api = {
     downloadExcel: (id, number) => download(`/invoices/${id}/excel`, `${number || 'invoice'}.xlsx`),
   },
   exports: {
-    excel: (params) => download(`/export/excel${buildQuery(params)}`, 'RKR-Transactions.xlsx'),
+    excel: (params) => download(`/export/excel${buildQuery(params)}`, 'RKR-Transactions.csv'),
   },
   settings: {
     get: () => request('/settings'),
