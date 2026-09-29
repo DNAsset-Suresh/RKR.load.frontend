@@ -15,6 +15,7 @@ import ErrorMessage from '@/components/ErrorMessage';
 import LoadDetailModal from '@/components/LoadDetailModal';
 import LoadEditModal from '@/components/LoadEditModal';
 import LoadDeleteModal from '@/components/LoadDeleteModal';
+import BulkUploadModal from '@/components/BulkUploadModal';
 import { kg, tons, money, count } from '@/utils/format';
 
 /** Daily load entry plus the full ledger. */
@@ -28,6 +29,7 @@ export default function LoadsPage() {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [exporting, setExporting] = useState(false);
+  const [uploadingBulk, setUploadingBulk] = useState(false);
 
   const { toast } = useToast();
 
@@ -125,6 +127,9 @@ export default function LoadsPage() {
                 </button>
               ) : null}
               <div style={{ flex: 1 }} />
+              <button className="tbtn" onClick={() => setUploadingBulk(true)}>
+                📥 Bulk Upload Excel
+              </button>
               <button className="tbtn primary" onClick={exportExcel} disabled={exporting}>
                 {exporting ? <span className="spinner" /> : 'Export Excel'}
               </button>
@@ -154,6 +159,10 @@ export default function LoadsPage() {
       <LoadDeleteModal
         load={deleting} open={!!deleting} onClose={() => setDeleting(null)}
         onDeleted={refreshAll}
+      />
+      <BulkUploadModal
+        open={uploadingBulk} onClose={() => setUploadingBulk(false)}
+        onUploaded={() => { setUploadingBulk(false); refreshAll(); }}
       />
     </>
   );

@@ -86,6 +86,7 @@ export const api = {
     create: (body) => request('/transactions', { method: 'POST', body: JSON.stringify(body) }),
     update: (id, body) => request(`/transactions/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
     remove: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),
+    bulkUpload: (loads) => request('/transactions/bulk', { method: 'POST', body: JSON.stringify({ loads }) }),
     preview: (weightKg) => request('/transactions/preview', {
       method: 'POST', body: JSON.stringify({ weightKg }),
     }),
