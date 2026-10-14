@@ -311,7 +311,7 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
         </div>
 
         {/* Field 5: Add Load Button */}
-        <div className="add-cell">
+        <div className="add-cell" style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginLeft: 'auto' }}>
           <button className="btn-add" onClick={submit} disabled={saving || atCapacity}>
             {saving ? <span className="spinner" /> : atCapacity ? `${material} Limit` : 'Add Load'}
           </button>

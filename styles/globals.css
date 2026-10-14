@@ -148,8 +148,9 @@ body{
 }
 .console-grid{
   display:grid;
-  grid-template-columns:minmax(150px,1fr) minmax(190px,1.5fr) minmax(150px,1fr) auto;
+  grid-template-columns:minmax(130px,1fr) minmax(150px,1.1fr) minmax(160px,1.3fr) minmax(140px,1.1fr) auto;
   gap:0;
+  align-items:stretch;
 }
 .field{padding:14px 16px; border-right:1px solid var(--hair-2); display:flex; flex-direction:column; gap:5px;}
 .field:last-of-type{border-right:none;}
@@ -170,17 +171,39 @@ body{
   letter-spacing:1px;
 }
 .field-row{display:flex; align-items:baseline; gap:7px;}
-.add-cell{display:flex; align-items:stretch; padding:10px;}
-.btn-add{
-  font-family:var(--disp); font-weight:800; font-size:13px; letter-spacing:1.4px;
-  text-transform:uppercase;
-  background:var(--royal); color:#fff; border:none; border-radius:8px;
-  padding:0 26px; cursor:pointer; white-space:nowrap;
-  transition:background .15s, transform .08s;
+.add-cell{
+  display:flex; align-items:center; justify-content:flex-end;
+  padding:12px 18px; margin-left:auto;
 }
-.btn-add:hover{background:var(--royal-d);}
+.btn-add{
+  font-family:var(--disp); font-weight:800; font-size:14.5px; letter-spacing:1.4px;
+  text-transform:uppercase;
+  background:var(--royal); color:#fff; border:none; border-radius:10px;
+  padding:14px 34px; min-height:50px; min-width:160px;
+  cursor:pointer; white-space:nowrap;
+  box-shadow:0 4px 14px rgba(26,86,219,.35);
+  transition:background .15s, transform .08s, box-shadow .15s;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.btn-add:hover{
+  background:var(--royal-d);
+  transform:translateY(-1px);
+  box-shadow:0 6px 18px rgba(26,86,219,.45);
+}
 .btn-add:active{transform:translateY(1px);}
-.btn-add:disabled{background:var(--hair); color:var(--faint); cursor:not-allowed;}
+.btn-add:disabled{
+  background:var(--hair); color:var(--faint);
+  box-shadow:none; cursor:not-allowed; transform:none;
+}
+@media (max-width:960px){
+  .console-grid{grid-template-columns:1fr 1fr;}
+  .add-cell{grid-column:1 / -1; justify-content:flex-end; border-top:1px solid var(--hair-2);}
+}
+@media (max-width:600px){
+  .console-grid{grid-template-columns:1fr;}
+  .field{border-right:none; border-bottom:1px solid var(--hair-2);}
+  .add-cell{justify-content:flex-end;}
+}
 
 /* live tape */
 .tape{
