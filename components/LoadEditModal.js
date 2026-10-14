@@ -34,7 +34,7 @@ export default function LoadEditModal({ load, open, onClose, onSaved }) {
         const res = await api.transactions.preview(parsed, material);
         if (live) setPreview(res.data);
       } catch { if (live) setPreview(null); }
-    }, 280);
+    }, 60);
     return () => { live = false; clearTimeout(t); };
   }, [weight, material]);
 

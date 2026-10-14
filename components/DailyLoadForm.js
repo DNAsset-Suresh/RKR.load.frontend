@@ -49,7 +49,42 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
     return parsed;
   }, [unit]);
 
-  // Debounced preview
+  // Instant 0ms local preview calculation
+  const getInstantPreview = useCallback((parsedKg, mat) => {
+    if (!parsedKg || parsedKg <= 0) return null;
+    const r = rates?.materials?.[mat] || (
+      mat === 'Dust'
+        ? { customerRatePerTon: 810, companyRatePerTon: 800, rkrProfitPerTon: 10, customerGstRate: 5, companyGstRate: 5 }
+        : { customerRatePerTon: 930, companyRatePerTon: 920, rkrProfitPerTon: 10, customerGstRate: 5, companyGstRate: 5 }
+    );
+    const t = Math.round((parsedKg / 1000) * 1000) / 1000;
+    const custBase = Math.round(t * r.customerRatePerTon * 100) / 100;
+    const custGst = Math.round(custBase * (r.customerGstRate / 100) * 100) / 100;
+    const custTotal = Math.round((custBase + custGst) * 100) / 100;
+    const compBase = Math.round(t * r.companyRatePerTon * 100) / 100;
+    const compGst = Math.round(compBase * (r.companyGstRate / 100) * 100) / 100;
+    const compTotal = Math.round((compBase + compGst) * 100) / 100;
+    const profit = Math.round(t * (r.rkrProfitPerTon || 10) * 100) / 100;
+    return {
+      material: mat,
+      weightKg: parsedKg,
+      weightTons: t,
+      customerRatePerTon: r.customerRatePerTon,
+      customerGstRate: r.customerGstRate,
+      customerBaseAmount: custBase,
+      customerGstAmount: custGst,
+      customerTotalAmount: custTotal,
+      companyRatePerTon: r.companyRatePerTon,
+      companyGstRate: r.companyGstRate,
+      companyBaseAmount: compBase,
+      companyGstAmount: compGst,
+      companyTotalAmount: compTotal,
+      rkrProfitPerTon: r.rkrProfitPerTon || 10,
+      rkrProfit: profit,
+    };
+  }, [rates]);
+
+  // Instant 0ms preview + 60ms server confirmation
   useEffect(() => {
     const parsedKg = getWeightInKg(weight);
     if (parsedKg === null) { setPreview(null); setTapeError(''); return; }
@@ -59,20 +94,23 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
       return;
     }
     setTapeError('');
-    setPreviewing(true);
+    // Instantaneous 0ms feedback
+    const instant = getInstantPreview(parsedKg, material);
+    setPreview(instant);
+
     const seq = ++previewSeq.current;
     const timer = setTimeout(async () => {
       try {
         const res = await api.transactions.preview(parsedKg, material);
         if (seq === previewSeq.current) setPreview(res.data);
       } catch (err) {
-        if (seq === previewSeq.current) { setPreview(null); setTapeError(err.message); }
+        if (seq === previewSeq.current && !instant) { setPreview(null); setTapeError(err.message); }
       } finally {
         if (seq === previewSeq.current) setPreviewing(false);
       }
-    }, 280);
+    }, 60);
     return () => clearTimeout(timer);
-  }, [weight, material, unit, getWeightInKg]);
+  }, [weight, material, unit, getWeightInKg, getInstantPreview]);
 
   const validate = useCallback(() => {
     const errors = {};
