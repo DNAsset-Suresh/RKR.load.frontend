@@ -7,27 +7,31 @@ import { useDateRange } from '@/hooks/useDateRange';
 import { useToast } from '@/hooks/useToast';
 import Header from '@/components/Header';
 import DateFilter from '@/components/DateFilter';
+import MaterialFilter from '@/components/MaterialFilter';
 import SummaryStrip from '@/components/SummaryStrip';
 import ProfitSummary from '@/components/ProfitSummary';
 import LoadingState from '@/components/LoadingState';
 import ErrorMessage from '@/components/ErrorMessage';
 import { money, kg, tons, fmtDate } from '@/utils/format';
 
-/** Daily / weekly / monthly / overall reports plus a per-vehicle rollup. */
+/** Daily / weekly / monthly / overall reports plus a per-vehicle rollup with material segments. */
 export default function ReportsPage() {
   const range = useDateRange('month');
+  const [material, setMaterial] = useState('All');
   const [exporting, setExporting] = useState(false);
   const { toast } = useToast();
 
+  const queryParams = { ...range.params, material };
+
   const period = useApi(
-    () => api.reports.weekly(range.params),
-    [JSON.stringify(range.params)],
+    () => api.reports.weekly(queryParams),
+    [JSON.stringify(queryParams)],
     { enabled: range.valid }
   );
 
   const vehicles = useApi(
-    () => api.reports.vehicles(range.params),
-    [JSON.stringify(range.params)],
+    () => api.reports.vehicles(queryParams),
+    [JSON.stringify(queryParams)],
     { enabled: range.valid }
   );
 
@@ -36,7 +40,7 @@ export default function ReportsPage() {
   async function exportExcel() {
     setExporting(true);
     try {
-      const name = await api.exports.excel(range.params);
+      const name = await api.exports.excel(queryParams);
       toast(`Downloaded ${name}`);
     } catch (err) {
       toast(err.message, 'bad');
@@ -55,14 +59,41 @@ export default function ReportsPage() {
       <div className="page">
         <section className="sec">
           <div className="sec-head">
-            <h2 className="sec-title">Report Period</h2>
+            <h2 className="sec-title">Filter & Report Period</h2>
             <span className="sec-note">
               {report?.range?.from
                 ? `${fmtDate(report.range.from)} \u2192 ${fmtDate(report.range.to)}`
                 : 'All recorded loads'}
+              {` \u00b7 Segment: ${material === 'All' ? 'All Materials' : material}`}
             </span>
           </div>
-          <DateFilter range={range} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <DateFilter range={range} />
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'var(--surface)',
+              border: '1px solid var(--hair)',
+              borderRadius: 'var(--r)',
+              padding: '10px 16px',
+              flexWrap: 'wrap',
+              gap: 12,
+            }}>
+              <MaterialFilter
+                value={material}
+                onChange={setMaterial}
+                includeAll={true}
+                label="Material Segment"
+              />
+              <span style={{ fontSize: '12.5px', color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
+                {material === 'Dust' ? 'Dust: ₹810 / ₹800 (5% GST) · RKR ₹10/T' :
+                 material === '40mm' ? '40mm: ₹930 / ₹920 (5% GST) · RKR ₹10/T' :
+                 'All Materials: Combined Summary'}
+              </span>
+            </div>
+          </div>
         </section>
 
         {period.error ? (
@@ -71,7 +102,7 @@ export default function ReportsPage() {
 
         <section className="sec">
           <div className="sec-head">
-            <h2 className="sec-title">Totals</h2>
+            <h2 className="sec-title">Totals ({material === 'All' ? 'All Materials' : material})</h2>
             <button className="tbtn primary" onClick={exportExcel} disabled={exporting}>
               {exporting ? <span className="spinner" /> : 'Export Excel'}
             </button>
@@ -86,7 +117,7 @@ export default function ReportsPage() {
 
         <section className="sec">
           <div className="sec-head">
-            <h2 className="sec-title">By Vehicle</h2>
+            <h2 className="sec-title">By Vehicle ({material === 'All' ? 'All Materials' : material})</h2>
             <span className="sec-note">
               {vehicles.data?.data
                 ? `${vehicles.data.data.vehicleCount} vehicles \u00b7 a vehicle may run many trips`
@@ -115,7 +146,7 @@ export default function ReportsPage() {
                         <td colSpan={7}>
                           <div className="empty">
                             <div className="empty-t">No vehicles in this period</div>
-                            <div>Widen the date range, or add a load.</div>
+                            <div>Widen the date range, or select another material segment.</div>
                           </div>
                         </td>
                       </tr>

@@ -16,6 +16,7 @@ export default function LoadDetailModal({ load, open, onClose, onEdit }) {
   const R = '\u20b9';
   const X = '\u00d7';
   const t = tons(load.weightTons);
+  const mat = load.material || '40mm';
 
   return (
     <ConfirmationModal
@@ -30,6 +31,10 @@ export default function LoadDetailModal({ load, open, onClose, onEdit }) {
       <dl className="dl">
         <Row k="Date" v={fmtLong(load.date)} />
         <Row k="Vehicle Number" v={load.vehicleNumber} />
+        <Row
+          k="Material Segment"
+          v={<span className={`mat-badge ${mat === 'Dust' ? 'dust' : 'm40'}`}>{mat}</span>}
+        />
       </dl>
       <div className="rule" />
       <dl className="dl">
@@ -39,20 +44,20 @@ export default function LoadDetailModal({ load, open, onClose, onEdit }) {
       </dl>
       <div className="rule" />
       <dl className="dl">
-        <Row k={`Customer  (${t} ${X} ${R}${load.customerRatePerTon})`} v={money(load.customerBaseAmount)} />
+        <Row k={`Customer (${t} ${X} ${R}${load.customerRatePerTon})`} v={money(load.customerBaseAmount)} />
         <Row k={`Customer GST @ ${load.customerGstRate}%`} v={money(load.customerGstAmount)} />
         <Row k="Customer Total" v={money(load.customerTotalAmount)} cls="big" />
       </dl>
       <div className="rule" />
       <dl className="dl">
-        <Row k={`Company  (${t} ${X} ${R}${load.companyRatePerTon})`} v={money(load.companyBaseAmount)} />
+        <Row k={`Company (${t} ${X} ${R}${load.companyRatePerTon})`} v={money(load.companyBaseAmount)} />
         <Row k={`Company GST @ ${load.companyGstRate}%`} v={money(load.companyGstAmount)} />
         <Row k="Company Total" v={money(load.companyTotalAmount)} cls="big" />
       </dl>
       <div className="rule" />
       <dl className="dl">
         <Row k="RKR Rate" v={`${R}${Number(load.rkrProfitPerTon).toFixed(2)} / Ton`} />
-        <Row k={`RKR Profit  (${t} ${X} ${R}${load.rkrProfitPerTon})`} v={money(load.rkrProfit)} cls="big gold" />
+        <Row k={`RKR Profit (${t} ${X} ${R}${load.rkrProfitPerTon})`} v={money(load.rkrProfit)} cls="big gold" />
       </dl>
     </ConfirmationModal>
   );

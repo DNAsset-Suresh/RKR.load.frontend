@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import api from '@/services/api';
 import { useApi } from '@/hooks/useApi';
 import { useDateRange } from '@/hooks/useDateRange';
@@ -8,6 +8,7 @@ import Header from '@/components/Header';
 import DashboardCard from '@/components/DashboardCard';
 import ProfitCard from '@/components/ProfitCard';
 import DateFilter from '@/components/DateFilter';
+import MaterialFilter from '@/components/MaterialFilter';
 import SummaryStrip from '@/components/SummaryStrip';
 import ProfitSummary from '@/components/ProfitSummary';
 import TonnageChart from '@/components/TonnageChart';
@@ -16,15 +17,18 @@ import ErrorMessage from '@/components/ErrorMessage';
 import { todayISO, money, kg, tons, count, fmtDate } from '@/utils/format';
 
 /**
- * Dashboard. Every card comes from GET /api/dashboard, which prices the summed
- * tonnage once - so no figure here is a sum of rounded rupee columns.
+ * Dashboard with material-aware filtering and reporting.
+ * Every card comes from GET /api/dashboard.
  */
 export default function DashboardPage() {
   const range = useDateRange('today');
+  const [material, setMaterial] = useState('All');
+
+  const queryParams = { ...range.params, material };
 
   const { data, loading, error, refetch } = useApi(
-    () => api.dashboard.get(range.params),
-    [JSON.stringify(range.params)],
+    () => api.dashboard.get(queryParams),
+    [JSON.stringify(queryParams)],
     { enabled: range.valid }
   );
 
@@ -38,18 +42,55 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Header title="Dashboard" rates={rates} />
+      <Header
+        title="Dashboard"
+        rates={rates ? { rkrProfitPerTon: rates.rkrProfitPerTon } : null}
+      />
 
       <div className="page">
         <section className="sec">
           <div className="sec-head">
-            <h2 className="sec-title">Period</h2>
+            <h2 className="sec-title">Filter & Period</h2>
             <span className="sec-note">
               {d ? d.range.label : 'Choose a range'}
               {d?.range?.from ? ` \u00b7 ${fmtDate(d.range.from)} \u2192 ${fmtDate(d.range.to)}` : ''}
+              {` \u00b7 Segment: ${material === 'All' ? 'All Materials' : material}`}
             </span>
           </div>
-          <DateFilter range={range} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <DateFilter range={range} />
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'var(--surface)',
+              border: '1px solid var(--hair)',
+              borderRadius: 'var(--r)',
+              padding: '10px 16px',
+              flexWrap: 'wrap',
+              gap: 12,
+            }}>
+              <MaterialFilter
+                value={material}
+                onChange={setMaterial}
+                includeAll={true}
+                label="Material Segment"
+              />
+
+              {rates && (
+                <div style={{ fontSize: '12.5px', color: 'var(--muted)', fontFamily: 'var(--mono)' }}>
+                  {material === 'Dust' ? (
+                    <span><strong>Dust Rates:</strong> Cust ₹810/T (5% GST) · Comp ₹800/T (5% GST) · Profit ₹10/T</span>
+                  ) : material === '40mm' ? (
+                    <span><strong>40mm Rates:</strong> Cust ₹930/T (5% GST) · Comp ₹920/T (5% GST) · Profit ₹10/T</span>
+                  ) : (
+                    <span><strong>All Materials:</strong> Combined Totals · RKR Profit ₹10/T</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </section>
 
         {error ? (
@@ -58,7 +99,7 @@ export default function DashboardPage() {
 
         <section className="sec">
           <div className="sec-head">
-            <h2 className="sec-title">Selected Period</h2>
+            <h2 className="sec-title">Selected Period ({material === 'All' ? 'All Materials' : material})</h2>
           </div>
           {loading && !cards ? <LoadingState /> : cards ? (
             <div className="tiles">
@@ -72,9 +113,9 @@ export default function DashboardPage() {
                 value={`\u20b9${rates?.rkrProfitPerTon ?? 10} / TON`} sub="fixed commission" />
               <ProfitCard label="Profit for Period" totals={cards.selected} rates={rates} />
               <DashboardCard label="Customer Total" value={cards.selected.customerTotalAmount} format="money"
-                sub={`${tons(cards.selected.totalWeightTons)} \u00d7 \u20b9${cards.selected.customerRatePerTon} + ${cards.selected.customerGstRate}% GST`} />
+                sub={`${tons(cards.selected.totalWeightTons)} Tons \u00b7 Incl. 5% GST`} />
               <DashboardCard label="Company Total" value={cards.selected.companyTotalAmount} format="money"
-                sub={`${tons(cards.selected.totalWeightTons)} \u00d7 \u20b9${cards.selected.companyRatePerTon} + ${cards.selected.companyGstRate}% GST`} />
+                sub={`${tons(cards.selected.totalWeightTons)} Tons \u00b7 Incl. 5% GST`} />
             </div>
           ) : null}
         </section>
@@ -83,8 +124,8 @@ export default function DashboardPage() {
           <>
             <section className="sec">
               <div className="sec-head">
-                <h2 className="sec-title">Today {'\u00b7'} Week {'\u00b7'} Month {'\u00b7'} Overall</h2>
-                <span className="sec-note">Independent of the filter above</span>
+                <h2 className="sec-title">Today {'\u00b7'} Week {'\u00b7'} Month {'\u00b7'} Overall ({material === 'All' ? 'All Materials' : material})</h2>
+                <span className="sec-note">Independent of the date range above</span>
               </div>
               <div className="tiles">
                 <DashboardCard label="Today's Loads" value={cards.today.loadCount} format="count"
@@ -107,7 +148,7 @@ export default function DashboardPage() {
 
             <section className="sec">
               <div className="sec-head">
-                <h2 className="sec-title">Billing Breakdown</h2>
+                <h2 className="sec-title">Billing Breakdown ({material === 'All' ? 'All Materials' : material})</h2>
                 <span className="sec-note">{d.range.label}</span>
               </div>
               <div className="panel">

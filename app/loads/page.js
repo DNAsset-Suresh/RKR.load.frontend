@@ -10,6 +10,7 @@ import DailyLoadForm from '@/components/DailyLoadForm';
 import TransactionTable from '@/components/TransactionTable';
 import Pagination from '@/components/Pagination';
 import DateFilter from '@/components/DateFilter';
+import MaterialFilter from '@/components/MaterialFilter';
 import VehicleSearch from '@/components/VehicleSearch';
 import ErrorMessage from '@/components/ErrorMessage';
 import LoadDetailModal from '@/components/LoadDetailModal';
@@ -18,10 +19,11 @@ import LoadDeleteModal from '@/components/LoadDeleteModal';
 import BulkUploadModal from '@/components/BulkUploadModal';
 import { kg, tons, money, count } from '@/utils/format';
 
-/** Daily load entry plus the full ledger. */
+/** Daily load entry plus the full ledger with material-aware filtering. */
 export default function LoadsPage() {
   const range = useDateRange('week');
   const [vehicle, setVehicle] = useState('');
+  const [ledgerMaterial, setLedgerMaterial] = useState('All');
   const [page, setPage] = useState(1);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -33,7 +35,13 @@ export default function LoadsPage() {
 
   const { toast } = useToast();
 
-  const params = { ...range.params, vehicle: vehicle || undefined, page, pageSize: 50 };
+  const params = {
+    ...range.params,
+    vehicle: vehicle || undefined,
+    material: ledgerMaterial !== 'All' ? ledgerMaterial : undefined,
+    page,
+    pageSize: 50,
+  };
 
   const { data, loading, error, refetch } = useApi(
     () => api.transactions.list(params),
@@ -55,7 +63,11 @@ export default function LoadsPage() {
   async function exportExcel() {
     setExporting(true);
     try {
-      const name = await api.exports.excel({ ...range.params, vehicle: vehicle || undefined });
+      const name = await api.exports.excel({
+        ...range.params,
+        vehicle: vehicle || undefined,
+        material: ledgerMaterial !== 'All' ? ledgerMaterial : undefined,
+      });
       toast(`Downloaded ${name}`);
     } catch (err) {
       toast(err.message, 'bad');
@@ -76,7 +88,7 @@ export default function LoadsPage() {
           <div className="sec-head">
             <h2 className="sec-title">Daily Load Entry</h2>
             <span className="sec-note">
-              Weight is entered in kilograms {'\u2014'} tons and profit are calculated on the server.
+              Select material segment (40mm or Dust). Enter weight in KG or Tons — preview and profit calculated on the server.
             </span>
           </div>
           <DailyLoadForm
@@ -98,7 +110,7 @@ export default function LoadsPage() {
 
         <section className="sec">
           <div className="sec-head">
-            <h2 className="sec-title">Load Ledger</h2>
+            <h2 className="sec-title">Load Ledger ({ledgerMaterial === 'All' ? 'All Materials' : ledgerMaterial})</h2>
             <span className="sec-note">
               {meta
                 ? `${count(meta.total)} ${meta.total === 1 ? 'entry' : 'entries'} \u00b7 ` +
@@ -115,7 +127,7 @@ export default function LoadsPage() {
           {error ? <ErrorMessage error={error} onRetry={refetch} /> : null}
 
           <div className="panel">
-            <div className="toolbar">
+            <div className="toolbar" style={{ flexWrap: 'wrap', gap: 10 }}>
               <VehicleSearch
                 value={vehicle}
                 onChange={(v) => { setVehicle(v); setPage(1); }}
@@ -126,6 +138,15 @@ export default function LoadsPage() {
                   Clear
                 </button>
               ) : null}
+
+              <MaterialFilter
+                value={ledgerMaterial}
+                onChange={(m) => { setLedgerMaterial(m); setPage(1); }}
+                includeAll={true}
+                size="small"
+                label="Segment"
+              />
+
               <div style={{ flex: 1 }} />
               <button className="tbtn" onClick={() => setUploadingBulk(true)}>
                 📥 Bulk Upload Excel
@@ -162,7 +183,7 @@ export default function LoadsPage() {
       />
       <BulkUploadModal
         open={uploadingBulk} onClose={() => setUploadingBulk(false)}
-        onUploaded={() => { setUploadingBulk(false); refreshAll(); }}
+        onUploaded={refreshAll}
       />
     </>
   );

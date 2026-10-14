@@ -9,11 +9,12 @@ import { normaliseVehicle, parseKg } from '@/utils/format';
 export default function BulkUploadModal({ open, onClose, onUploaded }) {
   const [step, setStep] = useState('select'); // select, preview, uploading, complete
   const [fileData, setFileData] = useState(null);
+  const [defaultMaterial, setDefaultMaterial] = useState('40mm');
   const [validRows, setValidRows] = useState([]);
   const [invalidRows, setInvalidRows] = useState([]);
   const [uploadSummary, setUploadSummary] = useState(null);
   const [error, setError] = useState('');
-  
+
   const fileInputRef = useRef(null);
 
   // Reset state when opened/closed
@@ -21,6 +22,7 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
     if (open) {
       setStep('select');
       setFileData(null);
+      setDefaultMaterial('40mm');
       setValidRows([]);
       setInvalidRows([]);
       setUploadSummary(null);
@@ -32,7 +34,6 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
   const excelDateToJSDate = (excelDate) => {
     if (!excelDate) return null;
     if (typeof excelDate === 'string') {
-      // Try to parse DD-MM-YYYY or YYYY-MM-DD
       const parts = excelDate.split(/[-/]/);
       if (parts.length === 3) {
         if (parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
@@ -47,7 +48,7 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setFileData(file);
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -56,28 +57,37 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
           setError('Excel processing library is still loading. Please try again in a moment.');
           return;
         }
-        
+
         const data = evt.target.result;
         const workbook = window.XLSX.read(data, { type: 'binary' });
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        
-        // Convert to JSON (header: 1 means array of arrays, but we want array of objects)
+
         const jsonData = window.XLSX.utils.sheet_to_json(sheet, { raw: true, defval: '' });
-        
+
         const valid = [];
         const invalid = [];
 
         jsonData.forEach((row, index) => {
-          // Find keys case-insensitively
           const keys = Object.keys(row);
           const dateKey = keys.find(k => k.toLowerCase().includes('date'));
           const vehicleKey = keys.find(k => k.toLowerCase().includes('vehicle'));
           const weightKey = keys.find(k => k.toLowerCase().includes('weight'));
+          const materialKey = keys.find(k => k.toLowerCase().includes('material') || k.toLowerCase().includes('segment'));
 
           const excelDate = dateKey ? row[dateKey] : '';
           const rawVehicle = vehicleKey ? String(row[vehicleKey]) : '';
           const rawWeight = weightKey ? String(row[weightKey]) : '';
+
+          let parsedMaterial = defaultMaterial;
+          if (materialKey && row[materialKey]) {
+            const mStr = String(row[materialKey]).trim().toLowerCase();
+            if (mStr.includes('dust')) {
+              parsedMaterial = 'Dust';
+            } else if (mStr.includes('40')) {
+              parsedMaterial = '40mm';
+            }
+          }
 
           let isValid = true;
           let errorMessage = '';
@@ -110,10 +120,11 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
           }
 
           const record = {
-            rowNum: index + 2, // +1 for 0-index, +1 for header
+            rowNum: index + 2,
             date: parsedDate,
             vehicleNumber: parsedVehicle,
             weightKg: parsedWeight,
+            material: parsedMaterial,
             errorReason: errorMessage
           };
 
@@ -138,7 +149,8 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
   const downloadTemplate = () => {
     if (!window.XLSX) return;
     const ws = window.XLSX.utils.json_to_sheet([
-      { Date: '29-09-2026', 'Vehicle Number': 'TN01AB1234', Weight: 8500 }
+      { Date: '29-09-2026', 'Vehicle Number': 'TN01AB1234', Material: '40mm', Weight: 8500 },
+      { Date: '29-09-2026', 'Vehicle Number': 'TN01CD5678', Material: 'Dust', Weight: 10000 }
     ]);
     const wb = window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb, ws, 'Loads');
@@ -150,6 +162,7 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
     const ws = window.XLSX.utils.json_to_sheet(invalidRows.map(r => ({
       Date: r.date || '',
       'Vehicle Number': r.vehicleNumber || '',
+      Material: r.material || defaultMaterial,
       Weight: r.weightKg || '',
       'Error Reason': r.errorReason
     })));
@@ -160,18 +173,19 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
 
   const handleUpload = async () => {
     if (validRows.length === 0) return;
-    
+
     setStep('uploading');
     setError('');
-    
+
     try {
       const payload = validRows.map(r => ({
         date: r.date,
         vehicleNumber: r.vehicleNumber,
-        weightKg: r.weightKg
+        weightKg: r.weightKg,
+        material: r.material || defaultMaterial
       }));
-      
-      const res = await api.transactions.bulkUpload(payload);
+
+      const res = await api.transactions.bulkUpload(payload, defaultMaterial);
       setUploadSummary(res.data);
       setStep('complete');
     } catch (err) {
@@ -192,7 +206,7 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
   return (
     <>
       <Script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js" strategy="lazyOnload" />
-      
+
       <ConfirmationModal
         open={open}
         title="Bulk Load Upload"
@@ -220,30 +234,67 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
           {error && <div className="alert" style={{ marginBottom: 16 }}>{error}</div>}
 
           {step === 'select' && (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <p style={{ color: 'var(--text-dim)', marginBottom: 20 }}>
+            <div style={{ textAlign: 'center', padding: '30px 0' }}>
+              <p style={{ color: 'var(--muted)', marginBottom: 16 }}>
                 Upload an Excel (.xlsx) file containing load records.<br />
-                Required columns: <strong>Date, Vehicle Number, Weight</strong>
+                Columns: <strong>Date, Vehicle Number, Material (40mm / Dust), Weight</strong>
               </p>
-              <input
-                type="file"
-                accept=".xlsx, .xls, .csv"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                onChange={handleFileUpload}
-              />
-              <button className="tbtn primary" onClick={() => fileInputRef.current?.click()}>
-                Select Excel File
-              </button>
+
+              {/* Default material picker if file lacks Material column */}
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                background: 'var(--surface-2)',
+                border: '1px solid var(--hair)',
+                borderRadius: 8,
+                padding: '6px 14px',
+                marginBottom: 20
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>
+                  Default Segment (if not specified in file):
+                </span>
+                <div style={{ display: 'inline-flex', gap: 4 }}>
+                  <button
+                    type="button"
+                    className={`mat-pill${defaultMaterial === '40mm' ? ' active-40mm' : ''}`}
+                    onClick={() => setDefaultMaterial('40mm')}
+                    style={{ cursor: 'pointer', padding: '3px 10px', fontSize: 11 }}
+                  >
+                    40mm
+                  </button>
+                  <button
+                    type="button"
+                    className={`mat-pill${defaultMaterial === 'Dust' ? ' active-dust' : ''}`}
+                    onClick={() => setDefaultMaterial('Dust')}
+                    style={{ cursor: 'pointer', padding: '3px 10px', fontSize: 11 }}
+                  >
+                    Dust
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <input
+                  type="file"
+                  accept=".xlsx, .xls, .csv"
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  onChange={handleFileUpload}
+                />
+                <button className="tbtn primary" onClick={() => fileInputRef.current?.click()}>
+                  Select Excel File
+                </button>
+              </div>
             </div>
           )}
 
           {step === 'preview' && (
             <div>
-              <div style={{ display: 'flex', gap: 20, marginBottom: 20 }}>
+              <div style={{ display: 'flex', gap: 20, marginBottom: 16, alignItems: 'center' }}>
                 <div>Total Rows: <strong>{validRows.length + invalidRows.length}</strong></div>
-                <div style={{ color: 'var(--accent)' }}>Valid: <strong>{validRows.length}</strong></div>
-                <div style={{ color: 'var(--text-dim)' }}>Invalid: <strong>{invalidRows.length}</strong></div>
+                <div style={{ color: 'var(--pos)' }}>Valid: <strong>{validRows.length}</strong></div>
+                <div style={{ color: 'var(--faint)' }}>Invalid: <strong>{invalidRows.length}</strong></div>
               </div>
 
               {invalidRows.length > 0 && (
@@ -262,13 +313,14 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
               )}
 
               <div className="table-wrap" style={{ maxHeight: '350px', overflowY: 'auto' }}>
-                <table className="table">
+                <table className="table" style={{ width: '100%' }}>
                   <thead>
                     <tr>
                       <th>Row</th>
                       <th>Date</th>
                       <th>Vehicle</th>
-                      <th className="r">Weight</th>
+                      <th>Material</th>
+                      <th className="r">Weight KG</th>
                       <th>Status</th>
                     </tr>
                   </thead>
@@ -278,8 +330,9 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
                         <td>{r.rowNum}</td>
                         <td>{r.date || '-'}</td>
                         <td>{r.vehicleNumber || '-'}</td>
+                        <td><span className={`mat-badge ${r.material === 'Dust' ? 'dust' : 'm40'}`}>{r.material}</span></td>
                         <td className="r">{r.weightKg || '-'}</td>
-                        <td style={{ color: 'var(--text-dim)' }}>{'\u274c'} {r.errorReason}</td>
+                        <td style={{ color: 'var(--neg)' }}>{'\u274c'} {r.errorReason}</td>
                       </tr>
                     ))}
                     {validRows.slice(0, Math.max(0, 20 - invalidRows.length)).map((r, i) => (
@@ -287,15 +340,16 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
                         <td>{r.rowNum}</td>
                         <td>{r.date}</td>
                         <td>{r.vehicleNumber}</td>
+                        <td><span className={`mat-badge ${r.material === 'Dust' ? 'dust' : 'm40'}`}>{r.material}</span></td>
                         <td className="r">{r.weightKg}</td>
-                        <td style={{ color: 'var(--accent)' }}>{'\u2713'} Valid</td>
+                        <td style={{ color: 'var(--pos)' }}>{'\u2713'} Valid</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               {(validRows.length + invalidRows.length) > 20 && (
-                <p style={{ color: 'var(--text-dim)', textAlign: 'center', marginTop: 10, fontSize: 12 }}>
+                <p style={{ color: 'var(--faint)', textAlign: 'center', marginTop: 10, fontSize: 12 }}>
                   Showing first 20 records
                 </p>
               )}
@@ -306,34 +360,34 @@ export default function BulkUploadModal({ open, onClose, onUploaded }) {
             <div style={{ textAlign: 'center', padding: '60px 0' }}>
               <span className="spinner" style={{ display: 'inline-block', marginBottom: 20, transform: 'scale(2)' }} />
               <h3 style={{ fontSize: 16 }}>Processing Loads...</h3>
-              <p style={{ color: 'var(--text-dim)' }}>Uploading {validRows.length} valid records to the database.</p>
+              <p style={{ color: 'var(--muted)' }}>Uploading {validRows.length} valid records to the database.</p>
             </div>
           )}
 
           {step === 'complete' && uploadSummary && (
             <div style={{ padding: '20px 0' }}>
-              <h3 style={{ fontSize: 18, color: 'var(--accent)', marginBottom: 20 }}>Upload Completed Successfully</h3>
-              
+              <h3 style={{ fontSize: 18, color: 'var(--pos)', marginBottom: 20 }}>Upload Completed Successfully</h3>
+
               <dl className="dl">
                 <dt>Total Excel Rows</dt>
                 <dd>{uploadSummary.totalRows}</dd>
-                
+
                 <dt>Successfully Uploaded</dt>
                 <dd className="gold">{uploadSummary.uploadedRows}</dd>
-                
+
                 <dt>Skipped (Duplicates)</dt>
-                <dd style={{ color: 'var(--text-dim)' }}>{uploadSummary.duplicateRows}</dd>
-                
+                <dd style={{ color: 'var(--muted)' }}>{uploadSummary.duplicateRows}</dd>
+
                 <dt>Skipped (Invalid)</dt>
-                <dd style={{ color: 'var(--text-dim)' }}>{invalidRows.length}</dd>
+                <dd style={{ color: 'var(--muted)' }}>{invalidRows.length}</dd>
               </dl>
-              
+
               {uploadSummary.duplicateRows > 0 && (
                 <div className="alert" style={{ marginTop: 20 }}>
                   <div>
                     <div className="alert-title">{uploadSummary.duplicateRows} Duplicate Records Skipped</div>
                     <div className="alert-body">
-                      These loads were already present in the database with the exact same date, vehicle, and weight.
+                      These loads were already present in the database with the exact same date, vehicle, material, and weight.
                     </div>
                   </div>
                 </div>

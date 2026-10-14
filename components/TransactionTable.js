@@ -4,8 +4,7 @@ import { money, kg, tons, fmtDate } from '@/utils/format';
 import LoadingState from './LoadingState';
 
 /**
- * The ledger, from the original <table id="tbl">. Same columns, same alignment,
- * same gold RKR column, plus View / Edit / Delete per row.
+ * The ledger table with material indicator badge and monetary breakdown.
  */
 export default function TransactionTable({
   rows, meta, loading, onView, onEdit, onDelete, emptyHint,
@@ -21,6 +20,7 @@ export default function TransactionTable({
           <tr>
             <th>Date</th>
             <th>Vehicle Number</th>
+            <th>Material</th>
             <th className="r">Weight KG</th>
             <th className="r">Weight Tons</th>
             <th className="r">Customer Total</th>
@@ -33,7 +33,7 @@ export default function TransactionTable({
         <tbody>
           {!rows || rows.length === 0 ? (
             <tr>
-              <td colSpan={8}>
+              <td colSpan={9}>
                 <div className="empty">
                   <div className="empty-t">No loads in this view</div>
                   <div>{emptyHint || 'Add a load, or widen the date range.'}</div>
@@ -44,6 +44,11 @@ export default function TransactionTable({
             <tr key={t.id}>
               <td className="num">{fmtDate(t.date)}</td>
               <td className="veh">{t.vehicleNumber}</td>
+              <td>
+                <span className={`mat-badge ${t.material === 'Dust' ? 'dust' : 'm40'}`}>
+                  {t.material || '40mm'}
+                </span>
+              </td>
               <td className="r">{kg(t.weightKg)}</td>
               <td className="r">{tons(t.weightTons)}</td>
               <td className="r">{money(t.customerTotalAmount)}</td>
@@ -65,6 +70,7 @@ export default function TransactionTable({
             <tr>
               <td className="lab">Period total</td>
               <td className="lab">{totals.loadCount} vehicles</td>
+              <td />
               <td className="r">{kg(totals.totalWeightKg)}</td>
               <td className="r">{tons(totals.totalWeightTons)}</td>
               <td className="r">{money(totals.customerTotalAmount)}</td>

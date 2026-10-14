@@ -38,6 +38,12 @@ export default function ConversionTape({ raw, preview, error, loading, rates }) 
 
   return (
     <div className="tape">
+      <span className="tape-step">
+        <span className="tape-k">Segment</span>
+        <span className={`mat-badge ${preview.material === 'Dust' ? 'dust' : 'm40'}`}>
+          {preview.material || '40mm'}
+        </span>
+      </span>
       <Step k="Weight" v={`${kg(preview.weightKg)} KG`} />
       <Arrow />
       <Step k={'\u00f7 1,000 = Tons'} v={`${tons(preview.weightTons)} Tons`} />
@@ -50,7 +56,7 @@ export default function ConversionTape({ raw, preview, error, loading, rates }) 
         <span className="tape-k">Formula</span>
         <span className="tape-v" style={{ fontSize: '12.5px', color: 'var(--faint)' }}>
           {tons(preview.weightTons)} {'\u00d7'} {'\u20b9'}
-          {rates?.rkrProfitPerTon ?? preview.rkrProfitPerTon}
+          {preview.rkrProfitPerTon ?? rates?.rkrProfitPerTon ?? 10}
         </span>
       </span>
     </div>

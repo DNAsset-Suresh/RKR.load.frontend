@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { money, kg, tons, fmtDate } from '@/utils/format';
 
-/** Invoice list as cards - a week is a richer object than a table row. */
+/** Invoice list as cards with material segment badges. */
 export default function InvoiceTable({ invoices, onDownloadPdf, onDownloadExcel, busyId }) {
   if (!invoices || invoices.length === 0) {
     return (
@@ -20,7 +20,12 @@ export default function InvoiceTable({ invoices, onDownloadPdf, onDownloadExcel,
         <div className="inv-card" key={inv.id}>
           <div className="inv-card-h">
             <span className="inv-no">{inv.invoiceNumber}</span>
-            <span className={`badge ${inv.status.toLowerCase()}`}>{inv.status}</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span className={`mat-badge ${inv.material === 'Dust' ? 'dust' : inv.material === '40mm' ? 'm40' : 'all'}`}>
+                {inv.material || 'All'}
+              </span>
+              <span className={`badge ${inv.status.toLowerCase()}`}>{inv.status}</span>
+            </div>
           </div>
 
           <div className="inv-period">

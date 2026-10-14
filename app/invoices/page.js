@@ -6,34 +6,49 @@ import { useApi } from '@/hooks/useApi';
 import { useToast } from '@/hooks/useToast';
 import Header from '@/components/Header';
 import InvoiceTable from '@/components/InvoiceTable';
+import MaterialFilter from '@/components/MaterialFilter';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import LoadingState from '@/components/LoadingState';
 import ErrorMessage from '@/components/ErrorMessage';
 import { money, kg, tons, fmtDate, todayISO, weekStartISO, addDaysISO } from '@/utils/format';
 
 /**
- * Weekly invoicing.
+ * Weekly invoicing with material segment support.
  *
- * ONE invoice per week. If the week already has one, the API answers 409 and
- * this page offers View / Download / Regenerate instead of silently creating a
- * second invoice for the same period.
+ * Invoices can be generated for All Materials or specific segments (40mm / Dust).
+ * If the week + segment already has one, the API answers 409 and
+ * this page offers View / Download / Regenerate.
  */
 export default function InvoicesPage() {
   const [weekOf, setWeekOf] = useState(weekStartISO(todayISO()));
+  const [material, setMaterial] = useState('All');
+  const [listMaterial, setListMaterial] = useState('All');
   const [generating, setGenerating] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [duplicate, setDuplicate] = useState(null);
   const { toast } = useToast();
 
-  const list = useApi(() => api.invoices.list({ pageSize: 50 }), []);
-  const preview = useApi(() => api.invoices.preview(weekOf), [weekOf]);
+  const listParams = {
+    pageSize: 50,
+    material: listMaterial !== 'All' ? listMaterial : undefined,
+  };
+
+  const list = useApi(
+    () => api.invoices.list(listParams),
+    [JSON.stringify(listParams)]
+  );
+
+  const preview = useApi(
+    () => api.invoices.preview(weekOf, material),
+    [weekOf, material]
+  );
 
   const p = preview.data?.data;
 
   async function generate(regenerate = false) {
     setGenerating(true);
     try {
-      const res = await api.invoices.generate(weekOf, regenerate);
+      const res = await api.invoices.generate(weekOf, regenerate, material);
       toast(res.message || 'Weekly invoice generated.');
       setDuplicate(null);
       list.refetch();
@@ -79,14 +94,14 @@ export default function InvoicesPage() {
       <div className="page">
         <section className="sec">
           <div className="sec-head">
-            <h2 className="sec-title">Generate</h2>
+            <h2 className="sec-title">Generate Invoice</h2>
             <span className="sec-note">
-              One invoice covers one whole week {'\u2014'} not one per vehicle.
+              One invoice covers loads for a week. Can be generated per material segment or for all materials.
             </span>
           </div>
 
           <div className="panel" style={{ padding: 18 }}>
-            <div className="range-row">
+            <div className="range-row" style={{ flexWrap: 'wrap', gap: 14 }}>
               <div className="ef inline">
                 <label htmlFor="week-of">Any date inside the week</label>
                 <input
@@ -94,22 +109,38 @@ export default function InvoicesPage() {
                   onChange={(e) => setWeekOf(e.target.value)}
                 />
               </div>
+
               <div className="ef inline">
                 <label>Week covered</label>
                 <div className="panel-range num" style={{ padding: '9px 0' }}>
                   {fmtDate(weekStartISO(weekOf))} {'\u2192'} {fmtDate(weekEnd)}
                 </div>
               </div>
-              <button
-                className="tbtn primary" style={{ padding: '10px 18px' }}
-                onClick={() => generate(false)}
-                disabled={generating || preview.loading || !!preview.error}
-              >
-                {generating ? <span className="spinner" /> : 'Generate Weekly Invoice'}
-              </button>
+
+              <div className="ef inline">
+                <label>Material Segment</label>
+                <div style={{ marginTop: 2 }}>
+                  <MaterialFilter
+                    value={material}
+                    onChange={setMaterial}
+                    includeAll={true}
+                    size="small"
+                  />
+                </div>
+              </div>
+
+              <div style={{ alignSelf: 'flex-end' }}>
+                <button
+                  className="tbtn primary" style={{ padding: '10px 18px' }}
+                  onClick={() => generate(false)}
+                  disabled={generating || preview.loading || !!preview.error}
+                >
+                  {generating ? <span className="spinner" /> : `Generate ${material} Invoice`}
+                </button>
+              </div>
             </div>
 
-            {preview.loading ? <LoadingState variant="inline" label="Checking that week" /> : null}
+            {preview.loading ? <LoadingState variant="inline" label="Checking loads for selected week and segment" /> : null}
 
             {preview.error ? (
               <div className="alert warn" style={{ marginTop: 12 }}>
@@ -123,6 +154,7 @@ export default function InvoicesPage() {
             {p ? (
               <>
                 <div className="summary-strip" style={{ border: '1px solid var(--hair)', borderRadius: 10, marginTop: 14 }}>
+                  <div className="ss"><div className="ss-k">Segment</div><div className="ss-v">{p.material || material}</div></div>
                   <div className="ss"><div className="ss-k">Loads</div><div className="ss-v">{p.itemCount}</div></div>
                   <div className="ss"><div className="ss-k">Total KG</div><div className="ss-v">{kg(p.totals.totalWeightKg)}</div></div>
                   <div className="ss"><div className="ss-k">Total Tons</div><div className="ss-v">{tons(p.totals.totalWeightTons)}</div></div>
@@ -139,7 +171,7 @@ export default function InvoicesPage() {
                     <div>
                       <div className="alert-title">Weekly Invoice Already Generated</div>
                       <div className="alert-body">
-                        {p.existingInvoice.invoiceNumber} already covers this week.
+                        {p.existingInvoice.invoiceNumber} already covers this week ({p.existingInvoice.material || 'All'}).
                         Generating again will refresh its contents under the same number.
                       </div>
                     </div>
@@ -151,11 +183,20 @@ export default function InvoicesPage() {
         </section>
 
         <section className="sec">
-          <div className="sec-head">
-            <h2 className="sec-title">All Invoices</h2>
-            <span className="sec-note">
-              {list.data?.meta ? `${list.data.meta.total} invoices` : ''}
-            </span>
+          <div className="sec-head" style={{ justifyContent: 'space-between' }}>
+            <div>
+              <h2 className="sec-title">All Invoices</h2>
+              <span className="sec-note">
+                {list.data?.meta ? `${list.data.meta.total} invoices` : ''}
+              </span>
+            </div>
+            <MaterialFilter
+              value={listMaterial}
+              onChange={setListMaterial}
+              includeAll={true}
+              size="small"
+              label="Filter"
+            />
           </div>
 
           {list.error ? <ErrorMessage error={list.error} onRetry={list.refetch} /> : null}
@@ -195,10 +236,11 @@ export default function InvoicesPage() {
         {duplicate ? (
           <>
             <p style={{ margin: '0 0 14px' }}>
-              {duplicate.invoiceNumber} already covers{' '}
+              {duplicate.invoiceNumber} ({duplicate.material || 'All'}) already covers{' '}
               {fmtDate(duplicate.weekStart)} to {fmtDate(duplicate.weekEnd)}.
             </p>
             <dl className="dl">
+              <dt>Segment</dt><dd>{duplicate.material || 'All'}</dd>
               <dt>Loads</dt><dd>{duplicate.totalLoads}</dd>
               <dt>Total Tons</dt><dd>{tons(duplicate.totalWeightTons)}</dd>
               <dt>RKR Profit</dt><dd className="gold">{money(duplicate.rkrProfit)}</dd>

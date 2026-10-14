@@ -11,6 +11,7 @@ export default function LoadEditModal({ load, open, onClose, onSaved }) {
   const [date, setDate] = useState('');
   const [vehicle, setVehicle] = useState('');
   const [weight, setWeight] = useState('');
+  const [material, setMaterial] = useState('40mm');
   const [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false);
   const { toast } = useToast();
@@ -20,6 +21,7 @@ export default function LoadEditModal({ load, open, onClose, onSaved }) {
     setDate(load.date);
     setVehicle(load.vehicleNumber);
     setWeight(String(load.weightKg));
+    setMaterial(load.material || '40mm');
     setPreview(null);
   }, [load]);
 
@@ -29,12 +31,12 @@ export default function LoadEditModal({ load, open, onClose, onSaved }) {
     let live = true;
     const t = setTimeout(async () => {
       try {
-        const res = await api.transactions.preview(parsed);
+        const res = await api.transactions.preview(parsed, material);
         if (live) setPreview(res.data);
       } catch { if (live) setPreview(null); }
     }, 280);
     return () => { live = false; clearTimeout(t); };
-  }, [weight]);
+  }, [weight, material]);
 
   async function save() {
     const parsed = parseKg(weight);
@@ -46,9 +48,12 @@ export default function LoadEditModal({ load, open, onClose, onSaved }) {
     setBusy(true);
     try {
       const res = await api.transactions.update(load.id, {
-        date, vehicleNumber: normaliseVehicle(vehicle), weightKg: parsed,
+        date,
+        vehicleNumber: normaliseVehicle(vehicle),
+        weightKg: parsed,
+        material,
       });
-      toast(`Load updated \u00b7 ${res.data.vehicleNumber} \u00b7 ${tons(res.data.weightTons)} Tons`);
+      toast(`Load updated \u00b7 [${res.data.material || material}] ${res.data.vehicleNumber} \u00b7 ${tons(res.data.weightTons)} Tons`);
       onSaved(res.data);
       onClose();
     } catch (err) {
@@ -68,6 +73,27 @@ export default function LoadEditModal({ load, open, onClose, onSaved }) {
         <input id="e-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
       <div className="ef">
+        <label>Material Segment</label>
+        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+          <button
+            type="button"
+            className={`mat-pill${material === '40mm' ? ' active-40mm' : ''}`}
+            onClick={() => setMaterial('40mm')}
+            style={{ cursor: 'pointer', border: '1px solid', padding: '6px 14px' }}
+          >
+            40mm
+          </button>
+          <button
+            type="button"
+            className={`mat-pill${material === 'Dust' ? ' active-dust' : ''}`}
+            onClick={() => setMaterial('Dust')}
+            style={{ cursor: 'pointer', border: '1px solid', padding: '6px 14px' }}
+          >
+            Dust
+          </button>
+        </div>
+      </div>
+      <div className="ef">
         <label htmlFor="e-veh">Vehicle Number</label>
         <input
           id="e-veh" type="text" maxLength={20} value={vehicle}
@@ -82,7 +108,7 @@ export default function LoadEditModal({ load, open, onClose, onSaved }) {
         />
         <span className="hint">
           {preview
-            ? `${kg(preview.weightKg)} KG = ${tons(preview.weightTons)} Tons \u00b7 RKR Profit ${money(preview.rkrProfit)}`
+            ? `[${preview.material || material}] ${kg(preview.weightKg)} KG = ${tons(preview.weightTons)} Tons \u00b7 RKR Profit ${money(preview.rkrProfit)}`
             : '\u00a0'}
         </span>
       </div>

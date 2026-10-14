@@ -5,19 +5,19 @@ import api from '@/services/api';
 import { useToast } from '@/hooks/useToast';
 import { normaliseVehicle, parseKg, todayISO, money, kg, tons } from '@/utils/format';
 import ConversionTape from './ConversionTape';
-import WeightInput from './WeightInput';
 
 /**
- * The entry console, converted from the original <div class="console">.
+ * The entry console, supporting 40mm and Dust materials independently.
  *
- * Flow: DATE -> VEHICLE NUMBER -> WEIGHT KG -> ADD LOAD.
- * The preview is debounced and served by the backend; the save is a POST. The
- * browser never decides a rupee figure.
+ * Flow: DATE -> MATERIAL TYPE -> VEHICLE NUMBER -> WEIGHT (KG/TONS) -> ADD LOAD.
+ * Preview is debounced and served by backend calcTransaction.
  */
 export default function DailyLoadForm({ rates, capacity, onCreated }) {
   const [date, setDate] = useState(todayISO());
+  const [material, setMaterial] = useState('40mm');
   const [vehicle, setVehicle] = useState('');
   const [weight, setWeight] = useState('');
+  const [unit, setUnit] = useState('kg'); // 'kg' or 'tons'
 
   const [preview, setPreview] = useState(null);
   const [previewing, setPreviewing] = useState(false);
@@ -29,15 +29,33 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
   const vehicleRef = useRef(null);
   const previewSeq = useRef(0);
 
-  const atCapacity = capacity && capacity.remaining <= 0;
+  // Active rate card for selected material
+  const activeRates = rates?.materials?.[material] || (
+    material === 'Dust'
+      ? { customerRatePerTon: 810, companyRatePerTon: 800, rkrProfitPerTon: 10, customerGstRate: 5, companyGstRate: 5 }
+      : { customerRatePerTon: 930, companyRatePerTon: 920, rkrProfitPerTon: 10, customerGstRate: 5, companyGstRate: 5 }
+  );
 
-  // Debounced preview. Every keystroke would otherwise be a round trip.
+  const materialCapacity = rates?.materials?.[material]?.capacity || capacity;
+  const atCapacity = materialCapacity && materialCapacity.remaining <= 0;
+
+  // Convert entered weight to KG for calculations
+  const getWeightInKg = useCallback((raw) => {
+    const parsed = parseKg(raw);
+    if (parsed === null || Number.isNaN(parsed)) return null;
+    if (unit === 'tons') {
+      return Math.round(parsed * 1000);
+    }
+    return parsed;
+  }, [unit]);
+
+  // Debounced preview
   useEffect(() => {
-    const parsed = parseKg(weight);
-    if (parsed === null) { setPreview(null); setTapeError(''); return; }
-    if (Number.isNaN(parsed) || parsed <= 0) {
+    const parsedKg = getWeightInKg(weight);
+    if (parsedKg === null) { setPreview(null); setTapeError(''); return; }
+    if (Number.isNaN(parsedKg) || parsedKg <= 0) {
       setPreview(null);
-      setTapeError('Enter the weight as a number of kilograms, e.g. 13610');
+      setTapeError(unit === 'tons' ? 'Enter weight in tons, e.g. 13.61' : 'Enter weight in KG, e.g. 13610');
       return;
     }
     setTapeError('');
@@ -45,7 +63,7 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
     const seq = ++previewSeq.current;
     const timer = setTimeout(async () => {
       try {
-        const res = await api.transactions.preview(parsed);
+        const res = await api.transactions.preview(parsedKg, material);
         if (seq === previewSeq.current) setPreview(res.data);
       } catch (err) {
         if (seq === previewSeq.current) { setPreview(null); setTapeError(err.message); }
@@ -54,7 +72,7 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
       }
     }, 280);
     return () => clearTimeout(timer);
-  }, [weight]);
+  }, [weight, material, unit, getWeightInKg]);
 
   const validate = useCallback(() => {
     const errors = {};
@@ -62,34 +80,35 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
     const v = normaliseVehicle(vehicle);
     if (!v) errors.vehicle = 'Enter the vehicle number.';
     else if (v.length < 4) errors.vehicle = 'Vehicle number looks too short.';
-    const parsed = parseKg(weight);
-    if (parsed === null) errors.weight = 'Enter the weight in KG.';
-    else if (Number.isNaN(parsed)) errors.weight = 'Weight must be a number, e.g. 13610.';
-    else if (parsed <= 0) errors.weight = 'Weight must be greater than zero.';
+    const parsedKg = getWeightInKg(weight);
+    if (parsedKg === null) errors.weight = `Enter the weight in ${unit.toUpperCase()}.`;
+    else if (Number.isNaN(parsedKg)) errors.weight = `Weight must be a valid number.`;
+    else if (parsedKg <= 0) errors.weight = 'Weight must be greater than zero.';
     setFieldErrors(errors);
     return errors;
-  }, [date, vehicle, weight]);
+  }, [date, vehicle, weight, unit, getWeightInKg]);
 
   async function submit() {
     if (atCapacity) {
-      toast('Maximum load entries reached. Export and archive first.', 'bad');
+      toast(`Maximum load entries reached for ${material}. Export and archive first.`, 'bad');
       return;
     }
     const errors = validate();
     const first = Object.values(errors)[0];
     if (first) { toast(first, 'bad'); return; }
 
+    const parsedKg = getWeightInKg(weight);
     setSaving(true);
     try {
       const res = await api.transactions.create({
         date,
         vehicleNumber: normaliseVehicle(vehicle),
-        weightKg: parseKg(weight),
+        weightKg: parsedKg,
+        material,
       });
       const t = res.data;
       toast(
-        `${t.vehicleNumber} \u00b7 ${kg(t.weightKg)} KG = ${tons(t.weightTons)} Tons ` +
-        `\u00b7 RKR ${money(t.rkrProfit)}`
+        `[${t.material || material}] ${t.vehicleNumber} \u00b7 ${kg(t.weightKg)} KG = ${tons(t.weightTons)} Tons \u00b7 RKR ${money(t.rkrProfit)}`
       );
       setVehicle('');
       setWeight('');
@@ -115,7 +134,43 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
 
   return (
     <div className="console">
+      {/* Rate Card Banner for Active Material */}
+      <div style={{
+        background: material === 'Dust' ? 'rgba(201,162,75,0.08)' : 'rgba(26,86,219,0.06)',
+        borderBottom: '1px solid var(--hair)',
+        padding: '8px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 8,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            fontFamily: 'var(--disp)',
+            fontWeight: 800,
+            fontSize: '11px',
+            letterSpacing: '1px',
+            textTransform: 'uppercase',
+            color: material === 'Dust' ? 'var(--gold-d)' : 'var(--royal)',
+          }}>
+            {material} Rate Card
+          </span>
+          <span style={{ fontSize: '13px', color: 'var(--ink-2)', fontFamily: 'var(--mono)' }}>
+            Customer: ₹{activeRates.customerRatePerTon}/T (5% GST) &nbsp;|&nbsp;
+            Company: ₹{activeRates.companyRatePerTon}/T (5% GST) &nbsp;|&nbsp;
+            Profit: ₹{activeRates.rkrProfitPerTon}/T
+          </span>
+        </div>
+        {materialCapacity ? (
+          <span style={{ fontSize: '12px', color: 'var(--faint)', fontFamily: 'var(--mono)' }}>
+            {material} entries: {materialCapacity.used} / {materialCapacity.maximumLoads}
+          </span>
+        ) : null}
+      </div>
+
       <div className="console-grid">
+        {/* Field 1: Date */}
         <div className="field">
           <label htmlFor="f-date">Date</label>
           <input
@@ -125,6 +180,30 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
           />
         </div>
 
+        {/* Field 2: Material Segment */}
+        <div className="field">
+          <label>Material Segment</label>
+          <div style={{ display: 'flex', gap: 4, marginTop: 2 }}>
+            <button
+              type="button"
+              className={`mat-pill${material === '40mm' ? ' active-40mm' : ''}`}
+              onClick={() => setMaterial('40mm')}
+              style={{ cursor: 'pointer', border: '1px solid', padding: '6px 12px' }}
+            >
+              40mm
+            </button>
+            <button
+              type="button"
+              className={`mat-pill${material === 'Dust' ? ' active-dust' : ''}`}
+              onClick={() => setMaterial('Dust')}
+              style={{ cursor: 'pointer', border: '1px solid', padding: '6px 12px' }}
+            >
+              Dust
+            </button>
+          </div>
+        </div>
+
+        {/* Field 3: Vehicle Number */}
         <div className="field">
           <label htmlFor="f-vehicle">Vehicle Number</label>
           <input
@@ -138,21 +217,72 @@ export default function DailyLoadForm({ rates, capacity, onCreated }) {
           />
         </div>
 
-        <WeightInput
-          value={weight} onChange={setWeight} onEnter={submit}
-          invalid={!!fieldErrors.weight}
-        />
+        {/* Field 4: Weight + Unit Selector */}
+        <div className="field">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label htmlFor="f-weight">Load Weight</label>
+            <div style={{ display: 'inline-flex', gap: 3 }}>
+              <button
+                type="button"
+                onClick={() => setUnit('kg')}
+                style={{
+                  background: unit === 'kg' ? 'var(--navy)' : 'transparent',
+                  color: unit === 'kg' ? '#fff' : 'var(--faint)',
+                  border: '1px solid var(--hair)',
+                  borderRadius: 4,
+                  fontSize: '9.5px',
+                  fontWeight: 700,
+                  padding: '1px 5px',
+                  cursor: 'pointer',
+                }}
+              >
+                KG
+              </button>
+              <button
+                type="button"
+                onClick={() => setUnit('tons')}
+                style={{
+                  background: unit === 'tons' ? 'var(--navy)' : 'transparent',
+                  color: unit === 'tons' ? '#fff' : 'var(--faint)',
+                  border: '1px solid var(--hair)',
+                  borderRadius: 4,
+                  fontSize: '9.5px',
+                  fontWeight: 700,
+                  padding: '1px 5px',
+                  cursor: 'pointer',
+                }}
+              >
+                TONS
+              </button>
+            </div>
+          </div>
+          <div className="field-row">
+            <input
+              id="f-weight"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              placeholder={unit === 'tons' ? '13.61' : '13610'}
+              className={fieldErrors.weight ? 'invalid' : undefined}
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+            />
+            <span className="field-unit">{unit.toUpperCase()}</span>
+          </div>
+        </div>
 
+        {/* Field 5: Add Load Button */}
         <div className="add-cell">
           <button className="btn-add" onClick={submit} disabled={saving || atCapacity}>
-            {saving ? <span className="spinner" /> : atCapacity ? 'Limit reached' : 'Add Load'}
+            {saving ? <span className="spinner" /> : atCapacity ? `${material} Limit` : 'Add Load'}
           </button>
         </div>
       </div>
 
       <ConversionTape
         raw={weight} preview={preview} loading={previewing}
-        error={tapeError} rates={rates}
+        error={tapeError} rates={activeRates}
       />
     </div>
   );

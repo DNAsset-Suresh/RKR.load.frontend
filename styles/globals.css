@@ -637,3 +637,40 @@ tbody td.day{color:var(--faint); font-size:13px;}
 .help{font-size:12.5px; color:var(--faint); margin-top:4px;}
 .field-error{font-size:12.5px; color:var(--neg); font-weight:600; margin-top:4px;}
 .ef input.invalid{border-color:var(--neg);}
+
+/* ============ MATERIAL BADGES & SELECTORS ============ */
+.mat-badge{
+  display:inline-flex; align-items:center; gap:4px;
+  font-family:var(--disp); font-weight:700; font-size:10px;
+  letter-spacing:.8px; text-transform:uppercase;
+  padding:2px 8px; border-radius:6px; border:1px solid var(--hair);
+  white-space:nowrap;
+}
+.mat-badge.m40{
+  background:rgba(26,86,219,.12);
+  border-color:rgba(26,86,219,.35);
+  color:var(--royal);
+}
+.mat-badge.dust{
+  background:rgba(201,162,75,.15);
+  border-color:rgba(201,162,75,.45);
+  color:var(--gold-d);
+}
+.mat-badge.all{
+  background:var(--surface-2);
+  border-color:var(--hair);
+  color:var(--muted);
+}
+.mat-pill{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 10px; border-radius:8px; font-family:var(--disp);
+  font-size:11px; font-weight:700; letter-spacing:.8px; text-transform:uppercase;
+  background:var(--surface-2); border:1px solid var(--hair);
+}
+.mat-pill.active-40mm{
+  background:rgba(26,86,219,.12); border-color:var(--royal); color:var(--royal);
+}
+.mat-pill.active-dust{
+  background:rgba(201,162,75,.15); border-color:var(--gold); color:var(--gold-d);
+}
+

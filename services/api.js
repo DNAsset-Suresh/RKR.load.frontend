@@ -86,9 +86,13 @@ export const api = {
     create: (body) => request('/transactions', { method: 'POST', body: JSON.stringify(body) }),
     update: (id, body) => request(`/transactions/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
     remove: (id) => request(`/transactions/${id}`, { method: 'DELETE' }),
-    bulkUpload: (loads) => request('/transactions/bulk', { method: 'POST', body: JSON.stringify({ loads }) }),
-    preview: (weightKg) => request('/transactions/preview', {
-      method: 'POST', body: JSON.stringify({ weightKg }),
+    bulkUpload: (loads, defaultMaterial = '40mm') => request('/transactions/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ loads, defaultMaterial }),
+    }),
+    preview: (weightKg, material = '40mm') => request('/transactions/preview', {
+      method: 'POST',
+      body: JSON.stringify({ weightKg, material }),
     }),
   },
   dashboard: {
@@ -104,9 +108,10 @@ export const api = {
   invoices: {
     list: (params) => request(`/invoices${buildQuery(params)}`),
     get: (id) => request(`/invoices/${id}`),
-    preview: (weekOf) => request(`/invoices/preview${buildQuery({ weekOf })}`),
-    generate: (weekOf, regenerate = false) => request('/invoices/weekly', {
-      method: 'POST', body: JSON.stringify({ weekOf, regenerate }),
+    preview: (weekOf, material = 'All') => request(`/invoices/preview${buildQuery({ weekOf, material })}`),
+    generate: (weekOf, regenerate = false, material = 'All') => request('/invoices/weekly', {
+      method: 'POST',
+      body: JSON.stringify({ weekOf, regenerate, material }),
     }),
     pdfUrl: (id) => `${BASE}/invoices/${id}/pdf?inline=true`,
     downloadPdf: (id, number) => download(`/invoices/${id}/pdf`, `${number || 'invoice'}.pdf`),

@@ -9,11 +9,17 @@ import { money, kg, tons, fmtDate } from '@/utils/format';
 export default function InvoicePreview({ invoice, business }) {
   if (!invoice) return null;
   const R = '\u20b9';
+  const mat = invoice.material || 'All';
 
   return (
     <div>
       <div className="inv-head">
-        <div className="inv-brand">RKR <em>ENTERPRISES</em></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
+          <div className="inv-brand">RKR <em>ENTERPRISES</em></div>
+          <span className={`mat-badge ${mat === 'Dust' ? 'dust' : mat === '40mm' ? 'm40' : 'all'}`} style={{ fontSize: 12, padding: '4px 12px' }}>
+            Segment: {mat === 'All' ? 'All Materials' : mat}
+          </span>
+        </div>
         <div className="inv-meta">
           Weekly Invoice {'\u00b7'} {invoice.invoiceNumber}
         </div>
@@ -64,7 +70,7 @@ export default function InvoicePreview({ invoice, business }) {
 
       <div className="sec-head" style={{ marginTop: 22 }}>
         <h2 className="sec-title">Load breakdown</h2>
-        <span className="sec-note">{invoice.items?.length || 0} loads in this week</span>
+        <span className="sec-note">{invoice.items?.length || 0} loads in this invoice</span>
       </div>
 
       <div className="panel">
@@ -72,9 +78,13 @@ export default function InvoicePreview({ invoice, business }) {
           <table>
             <thead>
               <tr>
-                <th>Date</th><th>Vehicle Number</th>
-                <th className="r">Weight KG</th><th className="r">Tons</th>
-                <th className="r">Customer</th><th className="r">Company</th>
+                <th>Date</th>
+                <th>Vehicle Number</th>
+                <th>Material</th>
+                <th className="r">Weight KG</th>
+                <th className="r">Tons</th>
+                <th className="r">Customer</th>
+                <th className="r">Company</th>
                 <th className="r">RKR Profit</th>
               </tr>
             </thead>
@@ -83,6 +93,11 @@ export default function InvoicePreview({ invoice, business }) {
                 <tr key={i.id}>
                   <td className="num">{fmtDate(i.date)}</td>
                   <td className="veh">{i.vehicleNumber}</td>
+                  <td>
+                    <span className={`mat-badge ${i.material === 'Dust' ? 'dust' : 'm40'}`}>
+                      {i.material || '40mm'}
+                    </span>
+                  </td>
                   <td className="r">{kg(i.weightKg)}</td>
                   <td className="r">{tons(i.weightTons)}</td>
                   <td className="r">{money(i.customerTotalAmount)}</td>
@@ -95,6 +110,7 @@ export default function InvoicePreview({ invoice, business }) {
               <tr>
                 <td className="lab">Total</td>
                 <td className="lab">{invoice.totalLoads} loads</td>
+                <td />
                 <td className="r">{kg(invoice.totalWeightKg)}</td>
                 <td className="r">{tons(invoice.totalWeightTons)}</td>
                 <td className="r">{money(invoice.customerTotalAmount)}</td>
